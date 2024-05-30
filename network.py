@@ -1,12 +1,11 @@
 import numpy as np
-import collections
 
 class Network:
     def __init__(self) -> None:
         self.layers = []
         self.has_error = False
         self.edges = []
-        self.learning_rate = 0.000000000001
+        self.learning_rate = 0.00000000001
         self.err = 0
     
     def update_weights(self):
@@ -21,6 +20,11 @@ class Network:
                 node[0].gradient = 0
                 if node[1]:
                     node[1].gradient = 0
+            layer.bias.gradient=0
+    
+    def update_biases(self):
+        for layer in self.layers:
+            layer.bias.val -= self.learning_rate*layer.bias.gradient
     
     def get_output(self):
         outs = []
@@ -84,7 +88,6 @@ class Network:
         L = self.layers[-1]
         L.vertices[0][0].set_true_vals(true_vals)
 
-    # Skips bias nodes for now
     def backward_pass(self):
         if self.has_error == False:
             print("ADD ERROR VERTEX")
@@ -94,8 +97,6 @@ class Network:
         stack = []
         visited = set()
         for elt in mserror.ins:
-            if type(elt) == Bias:
-                continue
             elt.gradient = mserror.compute_gradient(elt)
             stack.append([elt,elt.gradient])
         
@@ -103,8 +104,6 @@ class Network:
             curr, adj = stack.pop()
             visited.add(curr)
             for elt in curr.ins:
-                if type(elt) == Bias:
-                    continue
                 elt.gradient += adj*curr.compute_gradient(elt)
                 if elt not in visited:
                     stack.append([elt,elt.gradient])
@@ -151,6 +150,8 @@ class Layer:
             else:
                 for j in range(len(self.vertices[i][0].outs)):
                     self.vertices[i][0].outs[j].compute_value()
+        for i in range(len(self.bias.outs)):
+            self.bias.outs[i].compute_value()
     
     def set_input(self, data:list):
         for i in range(len(self.vertices)):
@@ -182,6 +183,7 @@ class Node(Vertex):
 class Bias(Node):
     def __init__(self) -> None:
         super().__init__(fcn="none")
+        self.val = 1
 
 class Input(Node):
     def __init__(self) -> None:
