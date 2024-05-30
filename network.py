@@ -1,9 +1,32 @@
 import numpy as np
+import collections
 
 class Network:
     def __init__(self) -> None:
         self.layers = []
         self.has_error = False
+        self.edges = []
+        self.learning_rate = 0.000000000001
+        self.err = 0
+    
+    def update_weights(self):
+        for edge in self.edges:
+            edge.weight -= self.learning_rate*edge.gradient
+    
+    def reset_gradients(self):
+        for edge in self.edges:
+            edge.gradient = 0
+        for layer in self.layers:
+            for node in layer.vertices:
+                node[0].gradient = 0
+                if node[1]:
+                    node[1].gradient = 0
+    
+    def get_output(self):
+        outs = []
+        for elt in self.layers[-2].vertices:
+            outs.append(elt[1].val)
+        return outs
     
     def num_layers(self) -> int:
         return len(self.layers)
@@ -15,11 +38,14 @@ class Network:
     def forward_pass(self) -> None:
         for layer in self.layers:
             layer.compute()
+            if type(layer.vertices[0][0]) == MSError:
+                self.err = layer.vertices[0][0].val
     
     def connect_specific_layers(self, origin:'Layer', destination:'Layer'):
         for i in range(len(origin.vertices)):
             for j in range(len(destination.vertices)):
                 e = Edge()
+                self.edges.append(e)
                 a = None
                 if origin.vertices[i][1] == None:
                     a = origin.vertices[i][0]
@@ -57,7 +83,36 @@ class Network:
     def set_true_out(self, true_vals:list):
         L = self.layers[-1]
         L.vertices[0][0].set_true_vals(true_vals)
+
+    # Skips bias nodes for now
+    def backward_pass(self):
+        if self.has_error == False:
+            print("ADD ERROR VERTEX")
+            exit(1)
+
+        mserror = self.layers[-1].vertices[0][0]
+        stack = []
+        visited = set()
+        for elt in mserror.ins:
+            if type(elt) == Bias:
+                continue
+            elt.gradient = mserror.compute_gradient(elt)
+            stack.append([elt,elt.gradient])
         
+        while stack:
+            curr, adj = stack.pop()
+            visited.add(curr)
+            for elt in curr.ins:
+                if type(elt) == Bias:
+                    continue
+                elt.gradient += adj*curr.compute_gradient(elt)
+                if elt not in visited:
+                    stack.append([elt,elt.gradient])
+                # If it is already in visited, we want to update its gradient for future computation
+                elif elt in visited:
+                    for thing in stack:
+                        if thing[0] == elt:
+                            thing[1] = elt.gradient
 
 class Layer:
     def __init__(self, activation_fcn='none') -> None:
@@ -109,6 +164,7 @@ class Vertex:
         self.ins = []
         self.outs = []
         self.val = 0
+        self.gradient = 0
         Vertex.count += 1
         self.name = f"V{Vertex.count}"
     
@@ -140,6 +196,11 @@ class Congregate(Node):
         for i in range(len(self.ins)):
             val += self.ins[i].val
         self.val = val
+    
+    def compute_gradient(self, inp):
+        # Assuming only edges feed into congregates
+        # Want the value of the variable that feeds into the weight node
+        return inp.val/inp.weight
 
 class Squared(Node):
     def __init__(self) -> None:
@@ -151,22 +212,30 @@ class Squared(Node):
             exit(1)
 
         self.val = self.ins[0].val * self.ins[0].val
+    
+    def compute_gradient(self, inp):
+        return 2*inp.val
+
 
 class Sigmoid(Node):
     def __init__(self) -> None:
         super().__init__(fcn="sigmoid")
     
     def compute_value(self):
-        if len(self.ins) > 0:
+        if len(self.ins) > 1:
             print("ERROR WITH NETWORK CONSTRUCTION")
             exit(1)
         
         self.val = 1/(1 + np.exp(-1 * self.ins[0].val))
+    
+    def compute_gradient(self, inp:Vertex):
+        return inp.val*(1-inp.val)
 
 class MSError(Node):
     def __init__(self) -> None:
         super().__init__(fcn="mserror")
         self.true_vals = []
+        self.val_diff_mapping = {}
     
     def set_true_vals(self, true_vals:list):
         self.true_vals = true_vals
@@ -174,9 +243,14 @@ class MSError(Node):
     def compute_value(self):
         val = 0
         for i in range(len(self.ins)):
+            self.val_diff_mapping[self.ins[i]] = self.ins[i].val - self.true_vals[i]
             val += (self.true_vals[i]-self.ins[i].val)**2
         val *= 1/len(self.ins)
         self.val = val
+    
+    def compute_gradient(self, inp):
+        return 2/len(self.ins) * (self.val_diff_mapping.get(inp))
+
 
 class Edge(Vertex):
     count = 0
@@ -191,5 +265,7 @@ class Edge(Vertex):
         self.val = self.ins[0].val*self.weight
     
     def __repr__(self) -> str:
-        # return "kind: " + str(self.kind) + " ins: " + str(self.ins) + " outs: " + str(self.outs) + " val: " + str(self.val) + " weight: " + str(self.weight)
         return self.name + " outs: " +  str(self.outs) + " weight: " + str(self.weight) + " val: " + str(self.val)
+    
+    def compute_gradient(self, inp):
+        return 1
