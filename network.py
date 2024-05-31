@@ -5,7 +5,7 @@ class Network:
         self.layers = []
         self.has_error = False
         self.edges = []
-        self.learning_rate = 0.00000000001
+        self.learning_rate = 0.000000001
         self.err = 0
     
     def update_weights(self):
