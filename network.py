@@ -52,7 +52,7 @@ class Network:
     def forward_pass(self) -> None:
         for layer in self.layers:
             layer.compute()
-            if type(layer.vertices[0][0]) == MSError:
+            if type(layer.vertices[0][0]) == MSError or type(layer.vertices[0][0]) == CELoss:
                 self.err = layer.vertices[0][0].val
             # If it is a softmax layer, we need to recompute the activations,
             # now that we know all the outputs.
@@ -103,6 +103,21 @@ class Network:
             else:
                 L.vertices[i][1].outs.append(mserror)
                 mserror.ins.append(L.vertices[i][1])
+        self.layers.append(le)
+    
+    def add_celoss_vertex(self):
+        self.has_error = True
+        le = Layer()
+        celoss = CELoss()
+        le.vertices.append((celoss,None))
+        L = self.layers[-1]
+        for i in range(len(L.vertices)):
+            if L.vertices[i][1] == None:
+                L.vertices[i][0].outs.append(celoss)
+                celoss.ins.append(L.vertices[i][0])
+            else:
+                L.vertices[i][1].outs.append(celoss)
+                celoss.ins.append(L.vertices[i][1])
         self.layers.append(le)
     
     def set_true_out(self, true_vals:list):
@@ -328,3 +343,23 @@ class Softmax(Node):
     def compute_gradient(self,inp):
         a = np.exp(inp.val)
         return (a*self.b)/((a+self.b)**2)
+
+class CELoss(Node):
+    def __init__(self) -> None:
+        super().__init__(fcn="celoss")
+        self.true_vals = []
+        self.val_diff_mapping = {}
+    
+    def set_true_vals(self, true_vals:list):
+        self.true_vals = true_vals
+    
+    def compute_value(self):
+        val = 0
+        for i in range(len(self.true_vals)):
+            self.val_diff_mapping[self.ins[i]] = self.true_vals[i]
+            val += self.true_vals[i] * np.log(self.ins[i].val)
+        val *= -1
+        self.val = val
+    
+    def compute_gradient(self, inp):
+        return -1 * self.val_diff_mapping.get(inp)/inp.val
