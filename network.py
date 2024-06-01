@@ -5,8 +5,9 @@ class Network:
         self.layers = []
         self.has_error = False
         self.edges = []
-        self.learning_rate = 0.000000001
+        self.learning_rate = 0.01
         self.err = 0
+        self.output_vals = []
     
     def update_weights(self):
         for edge in self.edges:
@@ -22,6 +23,12 @@ class Network:
                     node[1].gradient = 0
             layer.bias.gradient=0
     
+    def store_output_vals(self):
+        self.output_vals = []
+        layer = self.layers[-2]
+        for vert in layer.vertices:
+            self.output_vals.append(vert[0].val)
+
     def update_biases(self):
         for layer in self.layers:
             layer.bias.val -= self.learning_rate*layer.bias.gradient
@@ -29,7 +36,10 @@ class Network:
     def get_output(self):
         outs = []
         for elt in self.layers[-2].vertices:
-            outs.append(elt[1].val)
+            if elt[1] != None:
+                outs.append(elt[1].val)
+            else:
+                outs.append(elt[0].val)
         return outs
     
     def num_layers(self) -> int:
@@ -44,6 +54,12 @@ class Network:
             layer.compute()
             if type(layer.vertices[0][0]) == MSError:
                 self.err = layer.vertices[0][0].val
+            # If it is a softmax layer, we need to recompute the activations,
+            # now that we know all the outputs.
+            if layer.activation_fcn.upper() == "SOFTMAX":
+                self.store_output_vals()
+                for vert in layer.vertices:
+                    vert[1].compute_value_special(self.output_vals)
     
     def connect_specific_layers(self, origin:'Layer', destination:'Layer'):
         for i in range(len(origin.vertices)):
@@ -80,8 +96,13 @@ class Network:
         le.vertices.append((mserror,None))
         L = self.layers[-1]
         for i in range(len(L.vertices)):
-            L.vertices[i][1].outs.append(mserror)
-            mserror.ins.append(L.vertices[i][1])
+            # Account for regression
+            if L.vertices[i][1] == None:
+                L.vertices[i][0].outs.append(mserror)
+                mserror.ins.append(L.vertices[i][0])
+            else:
+                L.vertices[i][1].outs.append(mserror)
+                mserror.ins.append(L.vertices[i][1])
         self.layers.append(le)
     
     def set_true_out(self, true_vals:list):
@@ -135,6 +156,10 @@ class Layer:
                     activ = Squared()
                 elif self.activation_fcn.upper() == "SIGMOID":
                     activ = Sigmoid()
+                elif self.activation_fcn.upper() == "RELU":
+                    activ = ReLU()
+                elif self.activation_fcn.upper() == "SOFTMAX":
+                    activ = Softmax()
                 new = Congregate()
                 new.outs.append(activ)
                 activ.ins.append(new)
@@ -152,6 +177,7 @@ class Layer:
                     self.vertices[i][0].outs[j].compute_value()
         for i in range(len(self.bias.outs)):
             self.bias.outs[i].compute_value()
+        
     
     def set_input(self, data:list):
         for i in range(len(self.vertices)):
@@ -257,9 +283,9 @@ class MSError(Node):
 class Edge(Vertex):
     count = 0
 
-    def __init__(self, weight=1) -> None:
+    def __init__(self) -> None:
         super().__init__(kind=1)
-        self.weight = weight
+        self.weight = np.random.randn()/100
         Edge.count += 1
         self.name = f"E{Edge.count}"
     
@@ -271,3 +297,34 @@ class Edge(Vertex):
     
     def compute_gradient(self, inp):
         return 1
+
+class ReLU(Node):
+    def __init__(self) -> None:
+        super().__init__(fcn="relu")
+    
+    def compute_value(self):
+        self.val = max(0, self.ins[0].val)
+    
+    def compute_gradient(self, inp: Vertex):
+        return 1 if inp.val > 0 else 0
+
+class Softmax(Node):
+    def __init__(self) -> None:
+        super().__init__(fcn="softmax")
+        self.b = 0
+    
+    # Dummy computation because not all outputs will be computed when this gets called
+    def compute_value(self):
+        self.val = 1
+    
+    def compute_value_special(self,output_vals:list):
+        a = np.exp(self.ins[0].val)
+        b = 0
+        for i in range(len(output_vals)):
+            b += np.exp(output_vals[i])
+        self.val = a/b
+        self.b = b
+
+    def compute_gradient(self,inp):
+        a = np.exp(inp.val)
+        return (a*self.b)/((a+self.b)**2)
