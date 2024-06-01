@@ -31,17 +31,20 @@ net.layers.append(l4)
 
 net.connect_layers()
 net.add_celoss_vertex()
-net.set_true_out(assigment_map.get(5))
+net.set_true_out(assigment_map.get(y_train[0]))
 
 net.forward_pass()
-y = 5
+print(net.get_output())
+print(assigment_map.get(5))
+print()
+y = y_train[0]
 for j in range(1000):
     net.forward_pass()
     print("Prediction:",net.get_output(),"Loss:",net.err,"Iter:",j+1,"True:",y)
     net.backward_pass()
     net.update_weights()
     net.reset_gradients()
-    ind = np.random.randint(1, 60000)-1
+    ind = np.random.randint(0, 60000)
     x = x_train[ind].flatten()
     y = y_train[ind]
     l1.set_input(x)
