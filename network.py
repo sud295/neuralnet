@@ -5,7 +5,7 @@ class Network:
         self.layers = []
         self.has_error = False
         self.edges = []
-        self.learning_rate = 0.0000001
+        self.learning_rate = 0.001
         self.err = 0
         self.output_vals = []
     
@@ -300,7 +300,7 @@ class Edge(Vertex):
 
     def __init__(self) -> None:
         super().__init__(kind=1)
-        self.weight = np.random.uniform(0,1)
+        self.weight = np.random.normal(0,np.sqrt(2)/28)
         Edge.count += 1
         self.name = f"E{Edge.count}"
     

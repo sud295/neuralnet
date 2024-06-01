@@ -30,6 +30,7 @@ net.layers.append(l3)
 net.layers.append(l4)
 
 net.connect_layers()
+net.forward_pass()
 net.add_celoss_vertex()
 net.set_true_out(assigment_map.get(y_train[0]))
 
