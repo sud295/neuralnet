@@ -15,19 +15,17 @@ net = Network()
 
 l1 = Layer()
 l2 = Layer(activation_fcn="relu")
-l3 = Layer(activation_fcn="relu")
-l4 = Layer(activation_fcn="softmax")
+l3 = Layer(activation_fcn="softmax")
+
 l1.fill_layer(784,"input")
-l2.fill_layer(128,"cong")
-l3.fill_layer(64,"cong")
-l4.fill_layer(10,"cong")
+l2.fill_layer(5,"cong")
+l3.fill_layer(10,"cong")
 
 l1.set_input(list(x_train[0].flatten()))
 
 net.layers.append(l1)
 net.layers.append(l2)
 net.layers.append(l3)
-net.layers.append(l4)
 
 net.connect_layers()
 net.forward_pass()
@@ -39,17 +37,17 @@ print(net.get_output())
 print(assigment_map.get(5))
 print()
 y = y_train[0]
-for j in range(1000):
+for j in range(1000000):
     net.forward_pass()
     print("Prediction:",net.get_output(),"Loss:",net.err,"Iter:",j+1,"True:",y)
     net.backward_pass()
     net.update_weights()
     net.reset_gradients()
-    # ind = np.random.randint(0, 60000)
-    # x = x_train[ind].flatten()
-    # y = y_train[ind]
-    # l1.set_input(x)
-    # net.set_true_out(assigment_map.get(y))
+    ind = np.random.randint(0, 60000)
+    x = x_train[ind].flatten()
+    y = y_train[ind]
+    l1.set_input(x)
+    net.set_true_out(assigment_map.get(y))
 
 net.forward_pass()
 print("Final Output:",net.get_output(),"Loss:",net.err)
