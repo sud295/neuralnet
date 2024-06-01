@@ -45,11 +45,11 @@ for j in range(1000):
     net.backward_pass()
     net.update_weights()
     net.reset_gradients()
-    ind = np.random.randint(0, 60000)
-    x = x_train[ind].flatten()
-    y = y_train[ind]
-    l1.set_input(x)
-    net.set_true_out(assigment_map.get(y))
+    # ind = np.random.randint(0, 60000)
+    # x = x_train[ind].flatten()
+    # y = y_train[ind]
+    # l1.set_input(x)
+    # net.set_true_out(assigment_map.get(y))
 
 net.forward_pass()
 print("Final Output:",net.get_output(),"Loss:",net.err)
