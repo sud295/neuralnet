@@ -3,35 +3,38 @@ import numpy as np
 class Network:
     def __init__(self) -> None:
         self.layers = []
-        self.has_error = False
         self.edges = []
-        self.learning_rate = 0.001
-        self.err = 0
         self.output_vals = []
+
+        self.learning_rate = 0.00001
+        self.err = 0
+
+        self.has_error = False
     
+    # Updates the weights and resets the batch
     def update_weights(self):
         for edge in self.edges:
-            edge.weight -= self.learning_rate*edge.gradient
+            avg = edge.batch[0]/edge.batch[1]
+            edge.batch = [0,0]
+            edge.weight -= self.learning_rate*avg
     
+    # Clear gradients and add to batch for edges
     def reset_gradients(self):
         for edge in self.edges:
+            edge.batch[0] += edge.gradient
+            edge.batch[1] += 1
             edge.gradient = 0
         for layer in self.layers:
             for node in layer.vertices:
                 node[0].gradient = 0
                 if node[1]:
                     node[1].gradient = 0
-            layer.bias.gradient=0
+            layer.bias.gradient = 0
     
     def store_output_vals(self):
         self.output_vals = []
-        layer = self.layers[-2]
-        for vert in layer.vertices:
-            self.output_vals.append(vert[0].val)
-
-    def update_biases(self):
-        for layer in self.layers:
-            layer.bias.val -= self.learning_rate*layer.bias.gradient
+        for elt in self.layers[-2].vertices:
+            self.output_vals.append(elt[0].val)
     
     def get_output(self):
         outs = []
@@ -41,18 +44,12 @@ class Network:
             else:
                 outs.append(elt[0].val)
         return outs
-    
-    def num_layers(self) -> int:
-        return len(self.layers)
-    
-    def make_layers(self, num:int) -> None:
-        for i in range(num):
-            self.layers.append(Layer())
 
     def forward_pass(self) -> None:
         for layer in self.layers:
             layer.compute()
-            if type(layer.vertices[0][0]) == MSError or type(layer.vertices[0][0]) == CELoss:
+            if type(layer.vertices[0][0]) == MSError or \
+                type(layer.vertices[0][0]) == CELoss:
                 self.err = layer.vertices[0][0].val
             # If it is a softmax layer, we need to recompute the activations,
             # now that we know all the outputs.
@@ -125,29 +122,24 @@ class Network:
         L.vertices[0][0].set_true_vals(true_vals)
 
     def backward_pass(self):
-        if self.has_error == False:
-            print("ADD ERROR VERTEX")
-            exit(1)
+        if not self.has_error:
+            raise ValueError("No error vertex found")
 
-        mserror = self.layers[-1].vertices[0][0]
+        loss = self.layers[-1].vertices[0][0]
         stack = []
         visited = set()
-        for elt in mserror.ins:
-            elt.gradient = mserror.compute_gradient(elt)
-            stack.append([elt,elt.gradient])
+        for elt in loss.ins:
+            elt.gradient = loss.compute_gradient(elt)
+            stack.append(elt)
         
         while stack:
-            curr, adj = stack.pop()
+            curr = stack.pop()
             visited.add(curr)
+
             for elt in curr.ins:
-                elt.gradient += adj*curr.compute_gradient(elt)
-                if elt not in visited:
-                    stack.append([elt,elt.gradient])
-                # If it is already in visited, we want to update its gradient for future computation
-                elif elt in visited:
-                    for thing in stack:
-                        if thing[0] == elt:
-                            thing[1] = elt.gradient
+                elt.gradient += curr.gradient*curr.compute_gradient(elt)
+                if elt not in visited and elt not in stack:
+                    stack.append(elt)
 
 class Layer:
     def __init__(self, activation_fcn='none') -> None:
@@ -303,6 +295,7 @@ class Edge(Vertex):
         self.weight = np.random.normal(0,np.sqrt(2)/28)
         Edge.count += 1
         self.name = f"E{Edge.count}"
+        self.batch = [0,0]
     
     def compute_value(self):
         self.val = self.ins[0].val*self.weight
@@ -326,40 +319,40 @@ class ReLU(Node):
 class Softmax(Node):
     def __init__(self) -> None:
         super().__init__(fcn="softmax")
-        self.b = 0
+        self.exp_vals = 0
+        self.exp_inp = 0
     
     # Dummy computation because not all outputs will be computed when this gets called
     def compute_value(self):
         self.val = 1
     
     def compute_value_special(self,output_vals:list):
-        a = np.exp(self.ins[0].val)
-        b = 0
-        for i in range(len(output_vals)):
-            b += np.exp(output_vals[i])
-        self.val = a/b
-        self.b = b
+        self.exp_vals = np.exp(output_vals)
+        self.exp_inp = np.exp(self.ins[0].val)
+        self.val = self.exp_inp/np.sum(self.exp_vals )
 
     def compute_gradient(self,inp):
-        a = np.exp(inp.val)
-        return (a*self.b)/((a+self.b)**2)
+        # return (self.exp_inp*self.exp_vals)/((self.exp_inp+self.exp_vals)**2)
+        return self.val*(1-self.val)
 
 class CELoss(Node):
     def __init__(self) -> None:
         super().__init__(fcn="celoss")
         self.true_vals = []
-        self.val_diff_mapping = {}
+        self.val_mapping = {}
     
     def set_true_vals(self, true_vals:list):
         self.true_vals = true_vals
     
     def compute_value(self):
         val = 0
+        epsilon = 1e-6
         for i in range(len(self.true_vals)):
-            self.val_diff_mapping[self.ins[i]] = self.true_vals[i]
-            val += self.true_vals[i] * np.log(self.ins[i].val)
+            self.val_mapping[self.ins[i]] = self.true_vals[i]
+            val += self.true_vals[i] * np.log(self.ins[i].val+epsilon)
         val *= -1
         self.val = val
     
     def compute_gradient(self, inp):
-        return -1 * self.val_diff_mapping.get(inp)/inp.val
+        # return -1 * self.val_diff_mapping.get(inp)/inp.val
+        return inp.val - self.val_mapping.get(inp)

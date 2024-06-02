@@ -3,3 +3,4 @@
 __pycache__
 backprop.py
 autodiff
+test.py
